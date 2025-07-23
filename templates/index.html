@@ -3,7 +3,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-g">
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Match Predictions</title>
     <style>
@@ -35,7 +35,7 @@
                 <th>Match</th>
                 <th>Current Score (Goals)</th>
                 <th>Current Corners</th>
-                <th>Minute</th>
+                <th>Minute</th> <!-- Added Table Header -->
                 <th>Predicted Final Goals</th>
                 <th>Predicted Final Corners</th>
                 <th>Goal Confidence</th>
@@ -80,6 +80,7 @@
                     tableBody.innerHTML = ''; // Clear existing rows
 
                     predictions.forEach(p => {
+                        // Added cell for current_minute
                         const row = `
                             <tr>
                                 <td>${p.home_team} vs ${p.away_team}</td>

@@ -769,6 +769,8 @@ t_ids_thread = None
 t_info_thread = None
 t_parse_thread = None
 
+t_timer_execute = None
+
 
 to_get = [
     "match_live",
@@ -875,7 +877,6 @@ global_id_info_loop = True
 def call_get_id_info(timee):
     while global_id_info_loop:
         global abort
-        finished = False
         match_ids = [r for r in response_initial_scan]
         iter = 0
         for id in match_ids:
@@ -974,11 +975,14 @@ def get_good_time(str_time):
         return int(spl[0])+int(spl[1])
     return None
 
+def timer_execute(function, timee):
+    time.sleep(timee)
+    function()
 
 def start_threads():
     """Starts all background threads."""
     global global_do_loop, global_id_info_loop, do_parse, abort
-    global t_ids_thread, t_info_thread, t_parse_thread
+    global t_ids_thread, t_info_thread, t_parse_thread, t_timer_execute
 
     global_do_loop = True
     global_id_info_loop = True
@@ -996,6 +1000,10 @@ def start_threads():
     if t_parse_thread is None or not t_parse_thread.is_alive():
         t_parse_thread = threading.Thread(target=threaded_parse, args=(30,))
         t_parse_thread.start()
+    
+    if t_timer_execute is None or not t_timer_execute.is_alive():
+        t_timer_execute = threading.Thread(target=timer_execute, args=(stop_threads, 30))
+        t_timer_execute.start()
     print("Threads started")
 
 def stop_threads():
