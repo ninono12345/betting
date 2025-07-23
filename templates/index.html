@@ -1,0 +1,114 @@
+<!-- templates/index.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-g">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Match Predictions</title>
+    <style>
+        body { font-family: sans-serif; }
+        .controls { margin-bottom: 20px; }
+        #status { font-weight: bold; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Live Match Prediction</h1>
+
+    <div class="controls">
+        <button id="on-btn">ON</button>
+        <button id="off-btn">OFF</button>
+        <span>Status: <span id="status">OFF</span></span>
+    </div>
+
+    <div class="controls">
+        <button id="predict-btn">Get Predictions</button>
+    </div>
+
+    <h2>Predictions</h2>
+    <table id="prediction-table">
+        <thead>
+            <tr>
+                <th>Match</th>
+                <th>Current Score (Goals)</th>
+                <th>Current Corners</th>
+                <th>Minute</th>
+                <th>Predicted Final Goals</th>
+                <th>Predicted Final Corners</th>
+                <th>Goal Confidence</th>
+                <th>Corner Confidence</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Prediction rows will be inserted here -->
+        </tbody>
+    </table>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const onBtn = document.getElementById('on-btn');
+            const offBtn = document.getElementById('off-btn');
+            const statusEl = document.getElementById('status');
+            const predictBtn = document.getElementById('predict-btn');
+            const tableBody = document.querySelector("#prediction-table tbody");
+
+            async function updateStatus() {
+                const response = await fetch('/status');
+                const data = await response.json();
+                statusEl.textContent = data.status;
+            }
+
+            async function toggleThreads(command) {
+                await fetch('/toggle_threads', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: command })
+                });
+                updateStatus();
+            }
+            
+            async function getPredictions() {
+                predictBtn.disabled = true;
+                predictBtn.textContent = 'Loading...';
+                try {
+                    const response = await fetch('/predict');
+                    const predictions = await response.json();
+                    
+                    tableBody.innerHTML = ''; // Clear existing rows
+
+                    predictions.forEach(p => {
+                        const row = `
+                            <tr>
+                                <td>${p.home_team} vs ${p.away_team}</td>
+                                <td>${p.home_goals} - ${p.away_goals}</td>
+                                <td>${p.home_corners} - ${p.away_corners}</td>
+                                <td>${p.current_minute}</td>
+                                <td>${p.predicted_final_goals.toFixed(2)}</td>
+                                <td>${p.predicted_final_corners.toFixed(2)}</td>
+                                <td>${p.final_goal_confidence_interval[0].toFixed(2)} - ${p.final_goal_confidence_interval[1].toFixed(2)}</td>
+                                <td>${p.final_corner_confidence_interval[0].toFixed(2)} - ${p.final_corner_confidence_interval[1].toFixed(2)}</td>
+                            </tr>
+                        `;
+                        tableBody.innerHTML += row;
+                    });
+                } catch (error) {
+                    console.error("Failed to fetch predictions:", error);
+                } finally {
+                    predictBtn.disabled = false;
+                    predictBtn.textContent = 'Get Predictions';
+                }
+            }
+
+            onBtn.addEventListener('click', () => toggleThreads('start'));
+            offBtn.addEventListener('click', () => toggleThreads('stop'));
+            predictBtn.addEventListener('click', getPredictions);
+
+            // Initial status check
+            updateStatus();
+        });
+    </script>
+</body>
+</html>
