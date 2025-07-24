@@ -1,18 +1,48 @@
-<!-- templates/index.html -->
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Match Predictions</title>
+    <title>Live Match Prediction</title>
     <style>
-        body { font-family: sans-serif; }
+        body { font-family: sans-serif; margin: 20px; }
         .controls { margin-bottom: 20px; }
         #status { font-weight: bold; }
         table { border-collapse: collapse; width: 100%; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         th { background-color: #f2f2f2; }
+        tbody tr:hover { background-color: #f5f5f5; cursor: pointer; }
+        .red-text { color: red; font-weight: bold; }
+
+        #tooltip {
+            position: absolute;
+            display: none;
+            background-color: #333;
+            color: white;
+            padding: 10px;
+            border-radius: 6px;
+            pointer-events: none;
+            z-index: 100;
+            font-size: 0.9em;
+            white-space: nowrap;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .tooltip-grid {
+            display: grid;
+            grid-template-columns: auto auto;
+            gap: 10px 20px;
+        }
+        .tooltip-table {
+            border-collapse: collapse;
+        }
+        .tooltip-table th, .tooltip-table td {
+            padding: 4px 8px;
+            border: 1px solid #555;
+            text-align: center;
+        }
+        .tooltip-table th {
+            background-color: #444;
+        }
     </style>
 </head>
 <body>
@@ -35,17 +65,18 @@
                 <th>Match</th>
                 <th>Current Score (Goals)</th>
                 <th>Current Corners</th>
-                <th>Minute</th> <!-- Added Table Header -->
+                <th>Minute</th>
                 <th>Predicted Final Goals</th>
                 <th>Predicted Final Corners</th>
-                <th>Goal Confidence</th>
-                <th>Corner Confidence</th>
+                <th>Goal Coeff.</th>
+                <th>Corner Coeff.</th>
             </tr>
         </thead>
         <tbody>
-            <!-- Prediction rows will be inserted here -->
         </tbody>
     </table>
+
+    <div id="tooltip"></div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
@@ -54,49 +85,79 @@
             const statusEl = document.getElementById('status');
             const predictBtn = document.getElementById('predict-btn');
             const tableBody = document.querySelector("#prediction-table tbody");
+            const tooltip = document.getElementById('tooltip');
 
             async function updateStatus() {
-                const response = await fetch('/status');
-                const data = await response.json();
-                statusEl.textContent = data.status;
+                try {
+                    const response = await fetch('/status');
+                    const data = await response.json();
+                    statusEl.textContent = data.status;
+                } catch (error) {
+                    console.error('Error updating status:', error);
+                    statusEl.textContent = 'Error';
+                }
+            }
+            async function toggleThreads(command) {
+                try {
+                    const response = await fetch('/toggle_threads', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ command: command }),
+                    });
+                    const data = await response.json();
+                    statusEl.textContent = data.status;
+                } catch (error) {
+                    console.error('Error toggling threads:', error);
+                }
             }
 
-            async function toggleThreads(command) {
-                await fetch('/toggle_threads', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command: command })
-                });
-                updateStatus();
-            }
-            
             async function getPredictions() {
                 predictBtn.disabled = true;
                 predictBtn.textContent = 'Loading...';
                 try {
                     const response = await fetch('/predict');
-                    const predictions = await response.json();
-                    
-                    tableBody.innerHTML = ''; // Clear existing rows
+                    const predictions_dict = await response.json();
+
+                    const predictions = Object.values(predictions_dict);
+
+                    tableBody.innerHTML = '';
 
                     predictions.forEach(p => {
-                        // Added cell for current_minute
+                        if (p.error) {
+                            console.log("Skipping prediction due to backend error:", p.error);
+                            return;
+                        }
+                        const totalGoals = p.home_goals + p.away_goals;
+                        const goalConf = p.final_goal_confidence_interval;
+                        const goalDiffLower = Math.abs(totalGoals - goalConf[0]);
+                        const goalDiffUpper = Math.abs(totalGoals - goalConf[1]);
+                        const goalColorClass = (goalDiffLower <= 0.5 || goalDiffUpper <= 0.5) ? 'red-text' : '';
+                        const totalCorners = p.home_corners + p.away_corners;
+                        const cornerConf = p.final_corner_confidence_interval;
+                        const cornerDiffLower = Math.abs(totalCorners - cornerConf[0]);
+                        const cornerDiffUpper = Math.abs(totalCorners - cornerConf[1]);
+                        const cornerColorClass = (cornerDiffLower <= 0.5 || cornerDiffUpper <= 0.5) ? 'red-text' : '';
+
                         const row = `
-                            <tr>
+                            <tr
+                                data-ou-goals='${JSON.stringify(p.over_under_goals)}'
+                                data-ou-corners='${JSON.stringify(p.over_under_corners)}'>
                                 <td>${p.home_team} vs ${p.away_team}</td>
                                 <td>${p.home_goals} - ${p.away_goals}</td>
                                 <td>${p.home_corners} - ${p.away_corners}</td>
                                 <td>${p.current_minute}</td>
-                                <td>${p.predicted_final_goals.toFixed(2)}</td>
-                                <td>${p.predicted_final_corners.toFixed(2)}</td>
-                                <td>${p.final_goal_confidence_interval[0].toFixed(2)} - ${p.final_goal_confidence_interval[1].toFixed(2)}</td>
-                                <td>${p.final_corner_confidence_interval[0].toFixed(2)} - ${p.final_corner_confidence_interval[1].toFixed(2)}</td>
+                                <td class="${goalColorClass}">${p.predicted_final_goals.toFixed(2)}</td>
+                                <td class="${cornerColorClass}">${p.predicted_final_corners.toFixed(2)}</td>
+                                <td>${p.goal_coefficient.toFixed(3)}</td>
+                                <td>${p.corner_coefficient.toFixed(3)}</td>
                             </tr>
                         `;
                         tableBody.innerHTML += row;
                     });
                 } catch (error) {
-                    console.error("Failed to fetch predictions:", error);
+                    console.error("Failed to fetch or process predictions:", error);
                 } finally {
                     predictBtn.disabled = false;
                     predictBtn.textContent = 'Get Predictions';
@@ -107,7 +168,45 @@
             offBtn.addEventListener('click', () => toggleThreads('stop'));
             predictBtn.addEventListener('click', getPredictions);
 
-            // Initial status check
+            function createTooltipTable(title, data) {
+                let tableHTML = `<table class="tooltip-table"><thead><tr><th colspan="3">${title}</th></tr><tr><th>Line</th><th>Over</th><th>Under</th></tr></thead><tbody>`;
+                data.forEach(item => {
+                    tableHTML += `<tr><td>${item.line.toFixed(1)}</td><td>${item.over_coeff.toFixed(2)}</td><td>${item.under_coeff.toFixed(2)}</td></tr>`;
+                });
+                tableHTML += '</tbody></table>';
+                return tableHTML;
+            }
+
+            tableBody.addEventListener('mouseover', function(event) {
+                const row = event.target.closest('tr');
+                try {
+                    if (!row || !row.dataset.ouGoals) {
+                        return;
+                    }
+                    const ouGoalsData = JSON.parse(row.dataset.ouGoals);
+                    const ouCornersData = JSON.parse(row.dataset.ouCorners);
+
+                    const goalsTable = createTooltipTable('Goals', ouGoalsData);
+                    const cornersTable = createTooltipTable('Corners', ouCornersData);
+
+                    tooltip.innerHTML = `<div class="tooltip-grid">${goalsTable}${cornersTable}</div>`;
+                    tooltip.style.display = 'block';
+
+                } catch (e) {
+                    console.error("Could not display tooltip:", e);
+                }
+            });
+
+            tableBody.addEventListener('mouseout', function() {
+                tooltip.style.display = 'none';
+            });
+
+            document.addEventListener('mousemove', function(event) {
+                if (tooltip.style.display === 'block') {
+                    tooltip.style.left = (event.pageX + 15) + 'px';
+                    tooltip.style.top = (event.pageY + 15) + 'px';
+                }
+            });
             updateStatus();
         });
     </script>

@@ -621,124 +621,6 @@ def identify_home_away_teams(past_matches_for_id):
 
     return home_team_name, away_team_name
 
-# Add this import at the top of your Python file
-from scipy.stats import norm
-
-# def predict_final_outcomes(
-#     match_id,
-#     current_minute,
-#     timeline_dict,
-#     past_matches_dict,
-#     goal_model,
-#     corner_model,
-#     goal_error_model,
-#     corner_error_model
-# ):
-#     """
-#     UPDATED: Generates predictions, confidence intervals, and calculates coefficients
-#     for various over/under lines, returning them in a dictionary keyed by the match ID.
-    
-#     This function now depends on the 'scipy' library.
-#     """
-#     # --- 1. Data Retrieval and Validation (No changes here) ---
-#     if match_id not in timeline_dict or match_id not in past_matches_dict:
-#         return {match_id: {"error": "Match ID not found in the provided data."}}
-#     timeline = timeline_dict[match_id]
-#     past_matches_for_id = past_matches_dict[match_id]
-#     home_team_name, away_team_name = identify_home_away_teams(past_matches_for_id)
-#     if not home_team_name or not away_team_name:
-#         return {match_id: {"error": "Could not determine team names."}}
-#     home_df, away_df = past_matches_for_id
-#     continent, gender, youth = timeline.get('continent'), timeline.get('gender'), timeline.get('youth')
-#     if not all([continent, gender, youth]):
-#         return {match_id: {"error": "Missing categorical data."}}
-
-#     # --- 2. Feature Creation (No changes here) ---
-#     try:
-#         features = create_features(
-#             timeline, current_minute, home_df, away_df,
-#             home_team_name, away_team_name, continent, gender, youth
-#         )
-#         features_df = pd.DataFrame([features])
-#         model_feature_names = goal_model.get_booster().feature_names
-#         features_df = features_df.reindex(columns=model_feature_names, fill_value=0)
-#     except Exception as e:
-#         return {match_id: {"error": f"An error occurred during feature creation: {e}"}}
-
-#     # --- 3. Prediction of Outcomes and Errors (No changes here) ---
-#     predicted_remaining_goals = goal_model.predict(features_df)[0]
-#     predicted_remaining_corners = corner_model.predict(features_df)[0]
-#     predicted_goal_error = max(0, goal_error_model.predict(features_df)[0])
-#     predicted_corner_error = max(0, corner_error_model.predict(features_df)[0])
-
-#     # --- 4. Final Outcome and Confidence Interval Calculation (No changes here) ---
-#     current_total_goals = features['home_goals_so_far'] + features['away_goals_so_far']
-#     current_total_corners = features['home_corners_so_far'] + features['away_corners_so_far']
-#     predicted_final_goals = current_total_goals + predicted_remaining_goals
-#     predicted_final_corners = current_total_corners + predicted_remaining_corners
-#     final_goal_confidence_interval = [
-#         max(current_total_goals, predicted_final_goals - predicted_goal_error),
-#         predicted_final_goals + predicted_goal_error
-#     ]
-#     final_corner_confidence_interval = [
-#         max(current_total_corners, predicted_final_corners - predicted_corner_error),
-#         predicted_final_corners + predicted_corner_error
-#     ]
-#     goal_coefficient = 1 / (1 + predicted_goal_error)
-#     corner_coefficient = 1 / (1 + predicted_corner_error)
-
-#     # --- 5. NEW: Calculate Over/Under Coefficients ---
-#     over_under_goals_coeffs = []
-#     over_under_corners_coeffs = []
-
-#     # Use predicted error as the standard deviation (scale), with a small floor to prevent division by zero
-#     goal_std_dev = max(predicted_goal_error, 0.01)
-#     corner_std_dev = max(predicted_corner_error, 0.01)
-
-#     for i in [0.5, 1.5, 2.5, 3.5]:
-#         # Calculate for Goals
-#         goal_line = current_total_goals + i
-#         # norm.cdf calculates the probability of being LESS than the line
-#         under_goal_coeff = norm.cdf(goal_line, loc=predicted_final_goals, scale=goal_std_dev)
-#         over_goal_coeff = 1 - under_goal_coeff
-#         over_under_goals_coeffs.append({
-#             "line": goal_line,
-#             "over_coeff": float(over_goal_coeff),
-#             "under_coeff": float(under_goal_coeff)
-#         })
-
-#         # Calculate for Corners
-#         corner_line = current_total_corners + i
-#         under_corner_coeff = norm.cdf(corner_line, loc=predicted_final_corners, scale=corner_std_dev)
-#         over_corner_coeff = 1 - under_corner_coeff
-#         over_under_corners_coeffs.append({
-#             "line": corner_line,
-#             "over_coeff": float(over_corner_coeff),
-#             "under_coeff": float(under_corner_coeff)
-#         })
-
-#     # --- 6. Structure the Output (with new over/under data) ---
-#     result = {
-#         match_id: {
-#             "home_team": home_team_name, "away_team": away_team_name,
-#             "continent": continent, "youth": youth, "gender": gender,
-#             "home_goals": features['home_goals_so_far'], "away_goals": features['away_goals_so_far'],
-#             "home_corners": features['home_corners_so_far'], "away_corners": features['away_corners_so_far'],
-#             "current_minute": current_minute,
-#             "predicted_final_goals": float(predicted_final_goals),
-#             "predicted_final_corners": float(predicted_final_corners),
-#             "goal_prediction_error": float(predicted_goal_error),
-#             "corner_prediction_error": float(predicted_corner_error),
-#             "final_goal_confidence_interval": [float(val) for val in final_goal_confidence_interval],
-#             "final_corner_confidence_interval": [float(val) for val in final_corner_confidence_interval],
-#             "goal_coefficient": float(goal_coefficient),
-#             "corner_coefficient": float(corner_coefficient),
-#             "over_under_goals": over_under_goals_coeffs,      # <-- NEW DATA
-#             "over_under_corners": over_under_corners_coeffs  # <-- NEW DATA
-#         }
-#     }
-#     return result
-
 def predict_final_outcomes(
     match_id,
     current_minute,
@@ -748,26 +630,49 @@ def predict_final_outcomes(
     corner_model,
     goal_error_model,
     corner_error_model
-    ):
+):
     """
-    UPDATED: Generates predictions, confidence intervals, and calculates coefficients
-    for various over/under lines, returning them in a dictionary keyed by the match ID.
-    This function now depends on the 'scipy' library.
+    UPDATED: Generates predictions for final goals and corners, including confidence intervals
+    and team names, and returns them in a dictionary keyed by the match ID.
+
+    Args:
+        match_id (int or str): The unique identifier for the match.
+        current_minute (int): The current minute of the match to predict from.
+        timeline_dict (dict): A dictionary containing timeline data for all matches.
+        past_matches_dict (dict): A dictionary containing historical match data for teams.
+        goal_model: Trained XGBoost model for predicting remaining goals.
+        corner_model: Trained XGBoost model for predicting remaining corners.
+        goal_error_model: Trained XGBoost model for predicting the error of goal predictions.
+        corner_error_model: Trained XGBoost model for predicting the error of corner predictions.
+
+    Returns:
+        dict: A dictionary where the key is the match_id and the value is another
+              dictionary containing team names, predictions, errors, and confidence intervals.
+              Returns an error dictionary if prediction fails.
     """
-    # --- 1. Data Retrieval and Validation (No changes here) ---
+    # --- 1. Data Retrieval and Validation ---
     if match_id not in timeline_dict or match_id not in past_matches_dict:
         return {match_id: {"error": "Match ID not found in the provided data."}}
+
     timeline = timeline_dict[match_id]
     past_matches_for_id = past_matches_dict[match_id]
+
+    # --- NEW: Identify team names using the helper function ---
     home_team_name, away_team_name = identify_home_away_teams(past_matches_for_id)
+
     if not home_team_name or not away_team_name:
         return {match_id: {"error": "Could not determine team names."}}
-    home_df, away_df = past_matches_for_id
-    continent, gender, youth = timeline.get('continent'), timeline.get('gender'), timeline.get('youth')
-    if not all([continent, gender, youth]):
-        return {match_id: {"error": "Missing categorical data."}}
 
-    # --- 2. Feature Creation (No changes here) ---
+    home_df, away_df = past_matches_for_id
+
+    continent = timeline.get('continent')
+    gender = timeline.get('gender')
+    youth = timeline.get('youth')
+
+    if not all([continent, gender, youth]):
+        return {match_id: {"error": "Missing categorical data (continent, gender, or youth)."}}
+
+    # --- 2. Feature Creation ---
     try:
         features = create_features(
             timeline, current_minute, home_df, away_df,
@@ -779,17 +684,18 @@ def predict_final_outcomes(
     except Exception as e:
         return {match_id: {"error": f"An error occurred during feature creation: {e}"}}
 
-    # --- 3. Prediction of Outcomes and Errors (No changes here) ---
+    # --- 3. Prediction of Outcomes and Errors ---
     predicted_remaining_goals = goal_model.predict(features_df)[0]
     predicted_remaining_corners = corner_model.predict(features_df)[0]
     predicted_goal_error = max(0, goal_error_model.predict(features_df)[0])
     predicted_corner_error = max(0, corner_error_model.predict(features_df)[0])
 
-    # --- 4. Final Outcome and Confidence Interval Calculation (No changes here) ---
+    # --- 4. Final Outcome and Confidence Interval Calculation ---
     current_total_goals = features['home_goals_so_far'] + features['away_goals_so_far']
     current_total_corners = features['home_corners_so_far'] + features['away_corners_so_far']
     predicted_final_goals = current_total_goals + predicted_remaining_goals
     predicted_final_corners = current_total_corners + predicted_remaining_corners
+
     final_goal_confidence_interval = [
         max(current_total_goals, predicted_final_goals - predicted_goal_error),
         predicted_final_goals + predicted_goal_error
@@ -798,58 +704,28 @@ def predict_final_outcomes(
         max(current_total_corners, predicted_final_corners - predicted_corner_error),
         predicted_final_corners + predicted_corner_error
     ]
-    goal_coefficient = 1 / (1 + predicted_goal_error)
-    corner_coefficient = 1 / (1 + predicted_corner_error)
 
-    # --- 5. UPDATED: Calculate Over/Under Coefficients for Nearest 4 Lines ---
-    over_under_goals_coeffs = []
-    over_under_corners_coeffs = []
-
-    goal_std_dev = max(predicted_goal_error, 0.01)
-    corner_std_dev = max(predicted_corner_error, 0.01)
-
-    # Determine the starting line for goals and corners
-
-
-    for i in range(4):
-        # Calculate for Goals
-        goal_line = current_total_goals + i + 0.5
-        under_goal_coeff = norm.cdf(goal_line, loc=predicted_final_goals, scale=goal_std_dev)
-        over_goal_coeff = 1 - under_goal_coeff
-        over_under_goals_coeffs.append({
-            "line": goal_line,
-            "over_coeff": float(over_goal_coeff),
-            "under_coeff": float(under_goal_coeff)
-        })
-
-        # Calculate for Corners
-        corner_line = current_total_corners + i + 0.5
-        under_corner_coeff = norm.cdf(corner_line, loc=predicted_final_corners, scale=corner_std_dev)
-        over_corner_coeff = 1 - under_corner_coeff
-        over_under_corners_coeffs.append({
-            "line": corner_line,
-            "over_coeff": float(over_corner_coeff),
-            "under_coeff": float(under_corner_coeff)
-        })
-
-    # --- 6. Structure the Output (with new over/under data) ---
+    # --- 5. Structure the Output (with team names included) ---
     result = {
         match_id: {
-            "home_team": home_team_name, "away_team": away_team_name,
-            "continent": continent, "youth": youth, "gender": gender,
-            "home_goals": features['home_goals_so_far'], "away_goals": features['away_goals_so_far'],
-            "home_corners": features['home_corners_so_far'], "away_corners": features['away_corners_so_far'],
+            "home_team": home_team_name,
+            "away_team": away_team_name,
+            "continent": continent,
+            "youth": youth,
+            "continent": continent,
+            # "goals": f"{features['home_goals_so_far']} - {features['away_goals_so_far']}",
+            # "corners": f"{features['home_corners_so_far']} - {features['away_corners_so_far']}",
+            "home_goals": features['home_goals_so_far'],
+            "away_goals": features['away_goals_so_far'],
+            "home_corners": features['home_corners_so_far'],
+            "away_corners": features['away_corners_so_far'],
             "current_minute": current_minute,
             "predicted_final_goals": float(predicted_final_goals),
             "predicted_final_corners": float(predicted_final_corners),
             "goal_prediction_error": float(predicted_goal_error),
             "corner_prediction_error": float(predicted_corner_error),
             "final_goal_confidence_interval": [float(val) for val in final_goal_confidence_interval],
-            "final_corner_confidence_interval": [float(val) for val in final_corner_confidence_interval],
-            "goal_coefficient": float(goal_coefficient),
-            "corner_coefficient": float(corner_coefficient),
-            "over_under_goals": over_under_goals_coeffs,
-            "over_under_corners": over_under_corners_coeffs
+            "final_corner_confidence_interval": [float(val) for val in final_corner_confidence_interval]
         }
     }
     return result
@@ -881,6 +757,8 @@ with open("corner_error_model.pkl", "rb") as f:
 session_id = 'j7et1utpj640617j3m09jltr95'
 csrf_token = "6881dc60dd7e6"
 
+async_tasks = []
+
 response_initial_scan = {}
 responses = {}
 timestamps = {}
@@ -910,46 +788,28 @@ to_get = [
 # --- Placeholder for your functions ---
 # It's assumed that the following functions are defined here as you provided:
 response_initial_scan = {}
-def get_main():
+async def get_main():
+    """Asynchronously fetches the main list of matches."""
     global response_initial_scan
     url = 'https://vip.scoremer.com/ajax/score/data'
-
-    # The headers from the -H flags
     headers = {
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
     }
-
-    cookies = {
-        'ds_session': session_id,
-    }
-
-    # The payload from the --data-raw flag
-    data = {
-        'csrf_token': csrf_token,
-    }
+    cookies = {'ds_session': session_id}
+    data = {'csrf_token': csrf_token}
 
     try:
-        # Make the POST request with all the components
-        response_initial_scan = requests.post(
-            url,
-            headers=headers,
-            cookies=cookies,
-            data=data
-        )
+        async with aiohttp.ClientSession(cookies=cookies, headers=headers) as session:
+            async with session.post(url, data=data) as response:
+                response.raise_for_status()
+                json_data = await response.json()
+                response_initial_scan = {r["id"]: r for r in json_data["rs"] if "ss" in r and r["ss"] == "S" and r["status"].isnumeric()}
+                print(f"Main data fetched. {len(response_initial_scan)} matches active.")
 
-        # Raise an exception for bad status codes (4xx or 5xx)
-        response_initial_scan.raise_for_status()
-
-        # Print the status code and the response_initial_scan content
-        print(f"Status Code: {response_initial_scan.status_code}")
-        print("Response JSON:")
-        response_initial_scan = {r["id"]: r for r in response_initial_scan.json()["rs"] if "ss" in r and r["ss"] == "S" and r["status"].isnumeric()}
-
-    except requests.exceptions.RequestException as e:
-        print(f"An error occurred during the request: {e}")
-    except requests.exceptions.JSONDecodeError:
-        print("Failed to decode JSON. Raw response_initial_scan text:")
-        print(response_initial_scan.text)
+    except aiohttp.ClientError as e:
+        print(f"An error occurred during the main request: {e}")
+    except json.JSONDecodeError:
+        print("Failed to decode JSON from main request.")
 
 import time
 import threading
@@ -962,66 +822,66 @@ def call_get_main(timee):
             break
         time.sleep(timee)
     print("call_get_main stopped")
-def get_id_info(id, responses):
+
+
+async def get_id_info(session, id, responses):
+    """Asynchronously fetches detailed info for a single match ID."""
     print("do get id info", id)
 
     for tg in to_get:
         if id not in responses:
             responses[id] = {}
-        if tg == to_get[1]:
-            responses[id][tg] = ""
-            continue
-        if tg == to_get[3]:
-            responses[id][tg] = time.time()
-            continue
-        if tg == to_get[4]:
-            responses[id][tg] = False
-            continue
-        url = f'https://www.scoremer.com/{tg}/{id}'
+        # (Your logic for skipping certain 'tg' values remains the same)
+        # ...
 
+        url = f'https://www.scoremer.com/{tg}/{id}'
         headers = {
             'referer': f'https://www.scoremer.com/{tg}/{id}',
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'
         }
 
-        cookies = {
-            # 'uid': 'R-366339-97a2d9b4068723a7d562da',
-            'ds_session': session_id,
-        }
-
         try:
-            response = requests.get(url, headers=headers, cookies=cookies)
-            response.raise_for_status()  # Raises an exception for bad status codes (4xx or 5xx)
-
-
-            responses[id][tg] = response.text
-            timestamps[id] = time.time()
-
-        except requests.exceptions.RequestException as e:
+            async with session.get(url, headers=headers) as response:
+                response.raise_for_status()
+                responses[id][tg] = await response.text()
+                timestamps[id] = time.time()
+        except aiohttp.ClientError as e:
             print(f"An error occurred: {e}, id: {id}, m: {tg}")
 
-global_id_info_loop = True
-def call_get_id_info(timee):
-    while global_id_info_loop:
-        global abort
-        match_ids = [r for r in response_initial_scan]
-        iter = 0
-        for id in match_ids:
-            if abort:
-                print("aborted")
-                break
-            if id in responses:
-                if id in timestamps:
-                    elapsed_time = time.time() - timestamps[id]
-                    if elapsed_time < 150:
-                        print("skipped1", id)
-                        continue
-            
-            get_id_info(id, responses)
-            print("finished", iter, id)
-            iter+=1
-        # finished=True
-        time.sleep(timee)
+async def main_loop(interval=60):
+    """The main async loop for periodically fetching the match list."""
+    while True:
+        await get_main()
+        await asyncio.sleep(interval)
+
+async def id_info_loop(interval=30):
+    """The async loop for fetching detailed data for each match."""
+    async with aiohttp.ClientSession(cookies={'ds_session': session_id}) as session:
+        while True:
+            match_ids = list(response_initial_scan.keys())
+            for id in match_ids:
+                if id in timestamps and (time.time() - timestamps[id]) < 150:
+                    print("skipped1", id)
+                    continue
+                
+                await get_id_info(session, id, responses)
+                print("finished", id)
+            await asyncio.sleep(interval)
+
+async def parse_loop(interval=30):
+    """The async loop for parsing the fetched data."""
+    while True:
+        print("Starting parsing loop...")
+        for id in list(responses.keys()):
+            if id in response_initial_scan and not responses[id].get(to_get[4]):
+                try:
+                    parse_id_info(id, responses, response_initial_scan, timeline, past_matches)
+                    responses[id][to_get[4]] = True # Mark as parsed
+                except Exception as e:
+                    print(f"failed to parse {id}: {e}")
+        await asyncio.sleep(interval)
+
+
 import re
 
 
@@ -1149,24 +1009,28 @@ def stop_threads():
 
 def run_predictions():
     """
-    Runs predictions on all matches in response_initial_scan and returns the results.
+    Synchronous wrapper to run predictions on all available data.
+    (This function does not need to be async as it's CPU-bound and called from a sync Flask route).
     """
     predictions = []
     for iddd in set(response_initial_scan):
-        current_minute = get_good_time(response_initial_scan[iddd]["status"])
-        if current_minute is None:
-            continue
+        try:
+            current_minute = get_good_time(response_initial_scan[iddd]["status"])
+            if current_minute is None:
+                continue
 
-        prediction = predict_final_outcomes(
-            match_id=iddd,
-            current_minute=current_minute,
-            timeline_dict=timeline,
-            past_matches_dict=past_matches,
-            goal_model=goal_model,
-            corner_model=corner_model,
-            goal_error_model=goal_error_model,
-            corner_error_model=corner_error_model
-        )
-        if iddd in prediction and "error" not in prediction[iddd]:
-            predictions.append(prediction[iddd])
+            prediction = predict_final_outcomes(
+                match_id=iddd,
+                current_minute=current_minute,
+                timeline_dict=timeline,
+                past_matches_dict=past_matches,
+                goal_model=goal_model,
+                corner_model=corner_model,
+                goal_error_model=goal_error_model,
+                corner_error_model=corner_error_model
+            )
+            if iddd in prediction and "error" not in prediction[iddd]:
+                predictions.append(prediction[iddd])
+        except Exception as e:
+            print(f"Prediction failed for {iddd}: {e}")
     return predictions

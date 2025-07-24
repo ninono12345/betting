@@ -25,7 +25,8 @@ def toggle_threads():
 @app.route('/status')
 def status():
     """Returns the current status of the threads."""
-    if global_do_loop and global_id_info_loop and do_parse:
+    print(global_do_loop, global_id_info_loop, do_parse, abort)
+    if global_do_loop and global_id_info_loop and do_parse and not abort:
         return jsonify(status='ON')
     return jsonify(status='OFF')
 
